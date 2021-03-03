@@ -3,8 +3,6 @@ package rfcProducer
 import (
 	"os"
 	"testing"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func TestNewProducer(t *testing.T) {
@@ -41,14 +39,6 @@ func TestSaramaPartitioner(t *testing.T) {
 	os.Setenv("PRODUCER_PARTITIONER", "badvalue")
 	response := saramaPartitioner()
 	if response == nil {
-		t.Error()
-	}
-}
-
-func TestLogLevel(t *testing.T) {
-	os.Setenv("LOG_LEVEL", "badvalue")
-	response := logLevel()
-	if response != log.InfoLevel {
 		t.Error()
 	}
 }

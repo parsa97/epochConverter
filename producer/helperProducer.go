@@ -16,7 +16,9 @@ func newProducer() (sarama.SyncProducer, error) {
 	config := sarama.NewConfig()
 	var brokers []string
 	brokers = []string{"localhost:9092"}
-
+	config.Metadata.Retry.Max = 1
+	config.Metadata.Retry.Backoff = (10 * time.Second)
+	config.Metadata.RefreshFrequency = (15 * time.Minute)
 	config.Producer.RequiredAcks = requiredAcks()
 	if value, ok := os.LookupEnv("PRODUCER_MAX_MESSAGE_BYTES"); ok {
 		valuei, err := strconv.Atoi(value)
@@ -151,28 +153,4 @@ func saramaPartitioner() sarama.PartitionerConstructor {
 		}
 	}
 	return sarama.NewHashPartitioner
-}
-
-func logLevel() log.Level {
-	if value, ok := os.LookupEnv("LOG_LEVEL"); ok {
-		switch value {
-		case "trace":
-			return log.TraceLevel
-		case "debug":
-			return log.DebugLevel
-		case "info":
-			return log.InfoLevel
-		case "warn":
-			return log.WarnLevel
-		case "error":
-			return log.ErrorLevel
-		case "fatal":
-			return log.FatalLevel
-		case "panic":
-			return log.WarnLevel
-		default:
-			return log.InfoLevel
-		}
-	}
-	return log.InfoLevel
 }

@@ -9,6 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var ExporterErrCH = make(chan error, 0)
+
 var ProducedMessageCounter = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "produced_message_total",
@@ -16,10 +18,19 @@ var ProducedMessageCounter = prometheus.NewCounterVec(
 	},
 	[]string{"partition", "topic"},
 )
+var ConvertorMessageCounter = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "convert_message_total",
+		Help: "How many message converted.",
+	},
+	[]string{"consumerID", "topic"},
+)
 
-func Exporter() error {
+func Exporter() {
+	log.Info("Server Start Exporter")
 	listernPort, metricsPath := exporterConfig()
 	prometheus.MustRegister(ProducedMessageCounter)
+	prometheus.MustRegister(ConvertorMessageCounter)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf(`<html>
 <head><title>Producer Exporter</title></head>
@@ -32,7 +43,6 @@ func Exporter() error {
 	http.Handle(metricsPath, promhttp.Handler())
 	err := http.ListenAndServe(":"+listernPort, nil)
 	if err != nil {
-		log.Error(nil)
+		ExporterErrCH <- err
 	}
-	return err
 }

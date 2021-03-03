@@ -6,9 +6,15 @@ import (
 	"strconv"
 	"time"
 
+	exporter "epochConvertor/metrics"
+
 	"github.com/Shopify/sarama"
+
 	log "github.com/sirupsen/logrus"
 )
+
+var group = "epochConsumer"
+var consumerTopic = "input"
 
 var EpochTimes = make(chan string, 10000)
 var ConsumerErrCH = make(chan error, 0)
@@ -30,8 +36,18 @@ func (member *ConsumerGroupMember) ConsumeClaim(session sarama.ConsumerGroupSess
 	for msg := range claim.Messages() {
 		session.MarkMessage(msg, "")
 		member.MsgCh <- string(msg.Value)
+		if _, ok := os.LookupEnv("CI"); !ok {
+			incPrometuesCounter()
+		}
 	}
+	return nil
+}
 
+func incPrometuesCounter() error {
+	consumerGroup := getEnv("CONSUMER_GROUP", group)
+	topic := getEnv("CONSUMER_TOPIC", consumerTopic)
+	metric := exporter.ConvertorMessageCounter.WithLabelValues(consumerGroup, topic)
+	metric.Inc()
 	return nil
 }
 
@@ -90,7 +106,7 @@ func newConsumer() (sarama.ConsumerGroup, error) {
 	if value, ok := os.LookupEnv("CONSUMER_OFFSETS_AUTO_COMMIT_INTERVAL"); ok {
 		valuei, err := strconv.Atoi(value)
 		if err != nil {
-			log.Error("Bad! CONSUMER_OFFSETS_AUTO_COMMIT_INTERVAL: ", err)
+			log.Error("Bad! CONSUMER_OFFSETS_AUTO_COMMIT_INTERVAL: ", value, err)
 		}
 		consumerConfig.Consumer.Offsets.AutoCommit.Interval = time.Duration(rand.Int31n(int32(valuei))) * time.Second
 	}
@@ -176,10 +192,17 @@ func newConsumer() (sarama.ConsumerGroup, error) {
 	if value, ok := os.LookupEnv("CONSUMER_BROKERS"); ok {
 		brokers = []string{value}
 	}
-	group := "epochConsumer"
 	if value, ok := os.LookupEnv("CONSUMER_GROUP"); ok {
 		group = value
 	}
 	consumer, err := sarama.NewConsumerGroup(brokers, group, consumerConfig)
 	return consumer, err
+}
+
+func getEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	return value
 }

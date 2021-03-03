@@ -26,22 +26,15 @@ func main() {
 	go exporter.Exporter()
 	go consumer.StartConsumer(ctx)
 	go producer.StartProducer(ctx)
-	/* 	go func() {
-		for {
-			msg, isMore := <-consumer.EpochTimes
-			if isMore != true {
-				return
-			}
-			msgi, err := strconv.Atoi(msg)
-			if err != nil {
-				errCH <- err
-			}
-			log.Println(time.Unix(0, int64(msgi)*int64(time.Millisecond)).Format(time.RFC3339Nano), isMore)
-		}
-	}() */
 	go func() {
 		select {
+		case err := <-exporter.ExporterErrCH:
+			log.Println(err)
+			c <- os.Interrupt
 		case err := <-consumer.ConsumerErrCH:
+			log.Println(err)
+			c <- os.Interrupt
+		case err := <-producer.ProducerErrCH:
 			log.Println(err)
 			c <- os.Interrupt
 		}

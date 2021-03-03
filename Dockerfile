@@ -1,6 +1,8 @@
 FROM golang:1.15 as builder
 ENV GOPATH /opt/
 COPY ./epochConvertor.go ./helper.go /opt/epochConvertor/
+COPY ./producer /opt/epochConvertor/producer
+COPY ./consumer /opt/epochConvertor/consumer
 COPY ./metrics /opt/epochConvertor/metrics
 RUN cd /opt/epochConvertor \
     && go mod init epochConvertor \

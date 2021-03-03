@@ -4,7 +4,6 @@ import (
 	"context"
 	consumer "epochConvertor/consumer"
 	exporter "epochConvertor/metrics"
-	"errors"
 	"os"
 	"strconv"
 	"time"
@@ -15,42 +14,28 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func StartProducer(ctx context.Context) {
+func StartProducer(ctx context.Context) error {
+	log.Info("Server Start Producing")
 	topic := "output"
 	if value, ok := os.LookupEnv("PRODUCER_TOPIC"); ok {
 		topic = value
 	}
-
 	producer, err := newProducer()
 	if err != nil {
 		log.Error("Could not create producer: ", err)
-		os.Exit(1)
+		ProducerErrCH <- err
+		return err
 	}
-	if err := sendRFCMessage(ctx, producer, topic); err != nil {
-		log.Error("failed to produce: ", err)
-	}
-}
-
-func sendRFCMessage(ctx context.Context, producer sarama.SyncProducer, topic string) error {
-	log.Info("Server Start Producing")
 	var partitionProduced = cmap.New()
-	go func() error {
+	go func() {
 		for {
 			time.Sleep(time.Millisecond)
-			epochMsg, isMore := <-consumer.EpochTimes
-			if isMore != true {
-				err := errors.New("wait for new messages to consume")
-				log.Println(err)
-				return err
-			}
-			msgi, err := strconv.Atoi(epochMsg)
-			if err != nil {
-				log.Println(err)
-			}
-			msg := prepareMessage(topic, time.Unix(0, int64(msgi)*int64(time.Millisecond)).Format(time.RFC3339Nano))
+			epochMsg, _ := <-consumer.EpochTimes
+			msg := prepareMessage(topic, epochMsg)
 			partition, offset, err := producer.SendMessage(msg)
 			if err != nil {
-				return err
+				log.Error(err)
+				time.Sleep(1 * time.Second)
 			}
 			counter, _ := partitionProduced.Get(string(partition))
 			if counter == nil {
@@ -59,31 +44,32 @@ func sendRFCMessage(ctx context.Context, producer sarama.SyncProducer, topic str
 				counted := counter.(int)
 				counted++
 				partitionProduced.Set(string(partition), counted)
-				log.Println("Counter: ", " Message: ", epochMsg, " topic: ", topic, " partition: ", partition, " offset: ", offset)
-				M := exporter.ProducedMessageCounter.WithLabelValues(strconv.Itoa(int(partition)), topic)
-				M.Inc()
+				log.Trace("Counter: ", " Message: ", epochMsg, " topic: ", topic, " partition: ", partition, " offset: ", offset)
+				metric := exporter.ProducedMessageCounter.WithLabelValues(strconv.Itoa(int(partition)), topic)
+				metric.Inc()
 			}
 		}
 	}()
 	<-ctx.Done()
-	log.Info("Server Stopped")
+	log.Info("Producer Stopped")
 
-	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	_, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer func() {
 		cancel()
 	}()
-
-	log.Info("Server Exited Properly")
-
 	return nil
 }
 
-func prepareMessage(topic, message string) *sarama.ProducerMessage {
+func prepareMessage(topic, epochMsg string) *sarama.ProducerMessage {
+	msgi, err := strconv.Atoi(epochMsg)
+	if err != nil {
+		log.Error(err)
+	}
+	message := time.Unix(0, int64(msgi)*int64(time.Millisecond)).Format(time.RFC3339Nano)
 	msg := &sarama.ProducerMessage{
 		Topic:     topic,
 		Partition: -1,
 		Value:     sarama.StringEncoder(message),
 	}
-
 	return msg
 }

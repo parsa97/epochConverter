@@ -11,8 +11,11 @@ import (
 func TestExporter(t *testing.T) {
 	os.Setenv("LISTEN_PORT", "8080")
 	os.Setenv("METRICS_PATH", "/metrics")
-	M := ProducedMessageCounter.WithLabelValues("0", "test")
-	M.Inc()
+	produce := ProducedMessageCounter.WithLabelValues("0", "output")
+	consume := ConvertorMessageCounter.WithLabelValues("100", "input")
+
+	produce.Inc()
+	consume.Inc()
 	go Exporter()
 	time.Sleep(2 * time.Second)
 	httpcheck.Verbose = true
@@ -24,8 +27,11 @@ func TestExporter(t *testing.T) {
 			Name: "exporter",
 			Scenarios: []httpcheck.Scenario{
 				httpcheck.Scenario{
-					Name:  "http",
+					Name:  "produced metrics",
 					Tests: httpcheck.Tests{httpcheck.Test{Url: "http://localhost:8080/metrics", Content: "produced_message_total"}}},
+				httpcheck.Scenario{
+					Name:  "consumed metrics",
+					Tests: httpcheck.Tests{httpcheck.Test{Url: "http://localhost:8080/metrics", Content: "convert_message_total"}}},
 			},
 		},
 	}
