@@ -10,8 +10,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var ProducerErrCH = make(chan error, 0)
-
 func newProducer() (sarama.SyncProducer, error) {
 	config := sarama.NewConfig()
 	var brokers []string

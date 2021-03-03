@@ -9,6 +9,7 @@ import (
 )
 
 func TestExporter(t *testing.T) {
+	var errCH = make(chan error, 0)
 	os.Setenv("LISTEN_PORT", "8080")
 	os.Setenv("METRICS_PATH", "/metrics")
 	produce := ProducedMessageCounter.WithLabelValues("0", "output")
@@ -16,7 +17,7 @@ func TestExporter(t *testing.T) {
 
 	produce.Inc()
 	consume.Inc()
-	go Exporter()
+	go Exporter(errCH)
 	time.Sleep(2 * time.Second)
 	httpcheck.Verbose = true
 	httpcheck.RequestTimeout = 5

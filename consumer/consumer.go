@@ -9,14 +9,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func StartConsumer(ctx context.Context) error {
+func StartConsumer(ctx context.Context, errCH chan error, msgCH chan string) error {
 	log.Info("Server Start Consuming")
+	topic := defaultTopic
 	if value, ok := os.LookupEnv("CONSUMER_TOPIC"); ok {
-		consumerTopic = value
+		topic = value
 	}
 	consumer, err := newConsumer()
 	if err != nil {
-		ConsumerErrCH <- err
+		errCH <- err
 		return err
 	}
 
@@ -26,23 +27,23 @@ func StartConsumer(ctx context.Context) error {
 		}
 	}()
 
-	member := ConsumerGroupMember{MsgCh: EpochTimes}
+	member := ConsumerGroupMember{localMsgCh: msgCH}
 
 	go func() {
 		for {
-			err := consumer.Consume(ctx, strings.Split(consumerTopic, ","), &member)
+			err := consumer.Consume(ctx, strings.Split(topic, ","), &member)
 			if err != nil {
 				log.Error(err)
 			}
 			if ctx.Err() != nil {
-				ConsumerErrCH <- err
+				errCH <- err
 				return
 			}
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("Consumer Stopped")
+	log.Info("Consumer Stopped")
 	_, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer func() {
 		cancel()

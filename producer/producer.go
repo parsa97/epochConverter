@@ -2,7 +2,6 @@ package rfcProducer
 
 import (
 	"context"
-	consumer "epochConvertor/consumer"
 	exporter "epochConvertor/metrics"
 	"os"
 	"strconv"
@@ -14,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func StartProducer(ctx context.Context) error {
+func StartProducer(ctx context.Context, errCH chan error, msgCH chan string) error {
 	log.Info("Server Start Producing")
 	topic := "output"
 	if value, ok := os.LookupEnv("PRODUCER_TOPIC"); ok {
@@ -23,14 +22,14 @@ func StartProducer(ctx context.Context) error {
 	producer, err := newProducer()
 	if err != nil {
 		log.Error("Could not create producer: ", err)
-		ProducerErrCH <- err
+		errCH <- err
 		return err
 	}
 	var partitionProduced = cmap.New()
 	go func() {
 		for {
 			time.Sleep(time.Millisecond)
-			epochMsg, _ := <-consumer.EpochTimes
+			epochMsg, _ := <-msgCH
 			msg := prepareMessage(topic, epochMsg)
 			partition, offset, err := producer.SendMessage(msg)
 			if err != nil {

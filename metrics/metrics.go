@@ -9,7 +9,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var ExporterErrCH = make(chan error, 0)
+const exporterTemplate = `<html>
+<head><title>Producer Exporter</title></head>
+<body>
+<p><a href= %s >Metrics</a></p>
+</body>
+</html>
+`
 
 var ProducedMessageCounter = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
@@ -26,23 +32,17 @@ var ConvertorMessageCounter = prometheus.NewCounterVec(
 	[]string{"consumerID", "topic"},
 )
 
-func Exporter() {
+func Exporter(errCH chan error) {
 	log.Info("Server Start Exporter")
 	listernPort, metricsPath := exporterConfig()
 	prometheus.MustRegister(ProducedMessageCounter)
 	prometheus.MustRegister(ConvertorMessageCounter)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(`<html>
-<head><title>Producer Exporter</title></head>
-<body>
-<p><a href= %s >Metrics</a></p>
-</body>
-</html>
-`, metricsPath)))
+		w.Write([]byte(fmt.Sprintf(exporterTemplate, metricsPath)))
 	})
 	http.Handle(metricsPath, promhttp.Handler())
 	err := http.ListenAndServe(":"+listernPort, nil)
 	if err != nil {
-		ExporterErrCH <- err
+		errCH <- err
 	}
 }

@@ -13,14 +13,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var group = "epochConsumer"
-var consumerTopic = "input"
-
-var EpochTimes = make(chan string, 10000)
-var ConsumerErrCH = make(chan error, 0)
+const defaultGroup = "epochConsumer"
+const defaultTopic = "input"
 
 type ConsumerGroupMember struct {
-	MsgCh chan<- string
+	localMsgCh chan<- string
 }
 
 func (member *ConsumerGroupMember) Setup(sarama.ConsumerGroupSession) error {
@@ -35,7 +32,7 @@ func (member *ConsumerGroupMember) ConsumeClaim(session sarama.ConsumerGroupSess
 
 	for msg := range claim.Messages() {
 		session.MarkMessage(msg, "")
-		member.MsgCh <- string(msg.Value)
+		member.localMsgCh <- string(msg.Value)
 		if _, ok := os.LookupEnv("CI"); !ok {
 			incPrometuesCounter()
 		}
@@ -44,8 +41,8 @@ func (member *ConsumerGroupMember) ConsumeClaim(session sarama.ConsumerGroupSess
 }
 
 func incPrometuesCounter() error {
-	consumerGroup := getEnv("CONSUMER_GROUP", group)
-	topic := getEnv("CONSUMER_TOPIC", consumerTopic)
+	consumerGroup := getEnv("CONSUMER_GROUP", defaultGroup)
+	topic := getEnv("CONSUMER_TOPIC", defaultTopic)
 	metric := exporter.ConvertorMessageCounter.WithLabelValues(consumerGroup, topic)
 	metric.Inc()
 	return nil
@@ -156,7 +153,7 @@ func newConsumer() (sarama.ConsumerGroup, error) {
 		if err != nil {
 			log.Error("Bad! CONSUMER_GROUP_REBALANCE_TIMEOUT: ", err)
 		}
-		consumerConfig.Consumer.Group.Rebalance.Timeout = time.Duration(rand.Int31n(int32(valuei))) * time.Second
+		consumerConfig.Consumer.Group.Rebalance.Timeout = time.Duration(rand.Int31n(int32(valuei))) * time.Millisecond
 	}
 	if value, ok := os.LookupEnv("CONSUMER_GROUP_REBALANCE_RETRY_MAX"); ok {
 		valuei, err := strconv.Atoi(value)
@@ -170,7 +167,7 @@ func newConsumer() (sarama.ConsumerGroup, error) {
 		if err != nil {
 			log.Error("Bad! CONSUMER_GROUP_REBALANCE_RETRY_BACKOFF: ", err)
 		}
-		consumerConfig.Consumer.Group.Rebalance.Timeout = time.Duration(rand.Int31n(int32(valuei))) * time.Second
+		consumerConfig.Consumer.Group.Rebalance.Retry.Backoff = time.Duration(rand.Int31n(int32(valuei))) * time.Second
 	}
 	if value, ok := os.LookupEnv("CONSUMER_CLIENTID"); ok {
 		consumerConfig.ClientID = value
@@ -192,6 +189,7 @@ func newConsumer() (sarama.ConsumerGroup, error) {
 	if value, ok := os.LookupEnv("CONSUMER_BROKERS"); ok {
 		brokers = []string{value}
 	}
+	group := defaultGroup
 	if value, ok := os.LookupEnv("CONSUMER_GROUP"); ok {
 		group = value
 	}

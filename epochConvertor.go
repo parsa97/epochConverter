@@ -15,27 +15,21 @@ func init() {
 	log.SetLevel(logLevel())
 }
 
-var errCH chan error
-
 func main() {
 	c := make(chan os.Signal, 1)
+	var errCH = make(chan error, 0)
+	var msgCH = make(chan string, 10000)
 
 	signal.Notify(c, os.Interrupt)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go exporter.Exporter()
-	go consumer.StartConsumer(ctx)
-	go producer.StartProducer(ctx)
+	go exporter.Exporter(errCH)
+	go consumer.StartConsumer(ctx, errCH, msgCH)
+	go producer.StartProducer(ctx, errCH, msgCH)
 	go func() {
 		select {
-		case err := <-exporter.ExporterErrCH:
-			log.Println(err)
-			c <- os.Interrupt
-		case err := <-consumer.ConsumerErrCH:
-			log.Println(err)
-			c <- os.Interrupt
-		case err := <-producer.ProducerErrCH:
-			log.Println(err)
+		case err := <-errCH:
+			log.Error(err)
 			c <- os.Interrupt
 		}
 	}()
