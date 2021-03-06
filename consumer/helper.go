@@ -153,7 +153,7 @@ func newConsumer() (sarama.ConsumerGroup, error) {
 		if err != nil {
 			log.Error("Bad! CONSUMER_GROUP_REBALANCE_TIMEOUT: ", err)
 		}
-		consumerConfig.Consumer.Group.Rebalance.Timeout = time.Duration(rand.Int31n(int32(valuei))) * time.Millisecond
+		consumerConfig.Consumer.Group.Rebalance.Timeout = time.Duration(rand.Int31n(int32(valuei))) * time.Second
 	}
 	if value, ok := os.LookupEnv("CONSUMER_GROUP_REBALANCE_RETRY_MAX"); ok {
 		valuei, err := strconv.Atoi(value)
